@@ -9,8 +9,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.cuda.amp.autocast as autocast
-import torch.cuda.amp.GradScaler as GradScaler
+from torch.cuda.amp import autocast
+from torch.cuda.amp import GradScaler
 from tqdm import tqdm
 
 from preact_resnet import PreActResNet18
@@ -140,7 +140,7 @@ def main():
             best_state_dict = copy.deepcopy(model.state_dict())
         epoch_time = time.time()
         lr = scheduler.get_last_lr()[0]
-        logger.info('%d \t %.1f \t \t %.4f \t %.4f \t %.4f',
+        logger.info('%d \t\t %.1f \t \t %.4f \t %.4f \t \t %.4f',
             epoch, epoch_time - start_epoch_time, lr, train_loss/train_n, rob_acc/train_n)
     train_time = time.time()
     if not args.early_stop:
