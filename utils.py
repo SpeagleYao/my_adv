@@ -45,7 +45,7 @@ def get_loaders(dir_, batch_size):
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
-        batch_size=batch_size*4,
+        batch_size=batch_size*8,
         shuffle=False,
         pin_memory=True,
         num_workers=2,
@@ -93,7 +93,7 @@ def evaluate_pgd(test_loader, model, attack_iters, restarts):
     pgd_acc = 0
     n = 0
     model.eval()
-    for i, (X, y) in enumerate(tqdm(test_loader)):
+    for i, (X, y) in enumerate(test_loader):
         X, y = X.cuda(), y.cuda()
         pgd_delta = attack_pgd(model, X, y, epsilon, alpha, attack_iters, restarts)
         with torch.no_grad():
@@ -102,6 +102,7 @@ def evaluate_pgd(test_loader, model, attack_iters, restarts):
             pgd_loss += loss.item() * y.size(0)
             pgd_acc += (output.max(1)[1] == y).sum().item()
             n += y.size(0)
+        break
     return pgd_loss/n, pgd_acc/n
 
 

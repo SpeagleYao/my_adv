@@ -7,10 +7,12 @@ import time
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.cuda.amp import autocast
 from torch.cuda.amp import GradScaler
+from torch.nn import DataParallel as DP
 from tqdm import tqdm
 
 from preact_resnet import PreActResNet18
@@ -66,6 +68,7 @@ def main():
     pgd_alpha = (2 / 255.) / std
 
     model = PreActResNet18().cuda()
+    model = DP(model)
     model.train()
 
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -150,6 +153,7 @@ def main():
 
     # Evaluation
     model_test = PreActResNet18().cuda()
+    model_test = DP(model_test)
     model_test.load_state_dict(best_state_dict)
     model_test.float()
     model_test.eval()
@@ -162,5 +166,5 @@ def main():
 
 
 if __name__ == "__main__":
-    # print("Let's use", torch.cuda.device_count(), "GPUs!")
+    print("Let's use", torch.cuda.device_count(), "GPUs!")
     main()
