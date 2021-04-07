@@ -2,6 +2,8 @@
 
 Here I create my own type of Fast Adversarial Training code!
 
-Try push!
+I have turned mixed-precision realization from Amp to the one in PyTorch!
+
+Try push more!
 
 ---
