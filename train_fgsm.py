@@ -75,8 +75,7 @@ def main():
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.momentum, weight_decay=args.weight_decay)
     scaler = GradScaler()
 #TODO:
-    # criterion = nn.CrossEntropyLoss()
-    criterion = LabelSmoothing(0.2)
+    criterion = LabelSmoothing(0.1)
 
     if args.delta_init == 'previous':
         delta = torch.zeros(args.batch_size, 3, 32, 32).cuda()
@@ -109,6 +108,7 @@ def main():
                 delta.data = clamp(delta, lower_limit - X, upper_limit - X)
             delta.requires_grad = True
             
+            model.eval()
             with autocast():
                 output = model(X + delta[:X.size(0)])
                 loss = criterion(output, y)
@@ -119,6 +119,7 @@ def main():
             delta.data[:X.size(0)] = clamp(delta[:X.size(0)], lower_limit - X, upper_limit - X)
             delta = delta.detach()
 
+            model.train()
             opt.zero_grad()
             with autocast():
                 output = model(X + delta[:X.size(0)])
