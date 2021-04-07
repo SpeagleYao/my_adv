@@ -15,8 +15,7 @@ from torch.cuda.amp import GradScaler
 from torch.nn import DataParallel as DP
 from tqdm import tqdm
 
-from models import PreActResNet18
-from loss import LabelSmoothing
+from preact_resnet import PreActResNet18
 from utils import (upper_limit, lower_limit, std, clamp, get_loaders,
     attack_pgd, evaluate_pgd, evaluate_standard)
 
@@ -47,7 +46,7 @@ def main():
 
     if not os.path.exists(args.out_dir):
         os.mkdir(args.out_dir)
-    logfile = os.path.join(args.out_dir, 'fgsm_ls_output.log')
+    logfile = os.path.join(args.out_dir, 'inc_output.log')
     if os.path.exists(logfile):
         os.remove(logfile)
 
@@ -55,7 +54,7 @@ def main():
         format='[%(asctime)s] - %(message)s',
         datefmt='%Y/%m/%d %H:%M:%S',
         level=logging.INFO,
-        filename=os.path.join(args.out_dir, 'fgsm_ls_output.log'))
+        filename=os.path.join(args.out_dir, 'inc_output.log'))
     logger.info(args)
 
     np.random.seed(args.seed)
@@ -74,9 +73,7 @@ def main():
 
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.momentum, weight_decay=args.weight_decay)
     scaler = GradScaler()
-#TODO:
-    # criterion = nn.CrossEntropyLoss()
-    criterion = LabelSmoothing(0.2)
+    criterion = nn.CrossEntropyLoss()
 
     if args.delta_init == 'previous':
         delta = torch.zeros(args.batch_size, 3, 32, 32).cuda()
@@ -151,7 +148,7 @@ def main():
     train_time = time.time()
     if not args.early_stop:
         best_state_dict = model.state_dict()
-    torch.save(best_state_dict, os.path.join(args.out_dir, 'fgsm_ls_model.pth'))
+    torch.save(best_state_dict, os.path.join(args.out_dir, 'inc_model.pth'))
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
 
     # Evaluation
