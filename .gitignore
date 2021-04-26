@@ -2,6 +2,8 @@
 *.pth
 data/
 train_fgsm_output/
+train_inc_output/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -15,7 +15,8 @@ from torch.cuda.amp import GradScaler
 from torch.nn import DataParallel as DP
 from tqdm import tqdm
 
-from preact_resnet import PreActResNet18
+from models import PreActResNet18
+from loss import LabelSmoothing
 from utils import (upper_limit, lower_limit, std, clamp, get_loaders,
     attack_pgd, evaluate_pgd, evaluate_standard)
 
@@ -33,9 +34,10 @@ def get_args():
     parser.add_argument('--momentum', default=0.9, type=float)
     parser.add_argument('--epsilon', default=8, type=int)
     parser.add_argument('--alpha', default=10, type=float, help='Step size')
+    parser.add_argument('--lamda', default=10.0, type=float, help='Step size')
     parser.add_argument('--delta-init', default='random', choices=['zero', 'random', 'previous'],
         help='Perturbation initialization method')
-    parser.add_argument('--out-dir', default='train_fgsm_output', type=str, help='Output directory')
+    parser.add_argument('--out-dir', default='train_inc_output', type=str, help='Output directory')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     parser.add_argument('--early-stop', action='store_true', help='Early stop if overfitting occurs')
     return parser.parse_args()
@@ -46,7 +48,8 @@ def main():
 
     if not os.path.exists(args.out_dir):
         os.mkdir(args.out_dir)
-    logfile = os.path.join(args.out_dir, 'inc_output.log')
+    log_name = 'inc_output_l{}.log'.format(args.lamda)
+    logfile = os.path.join(args.out_dir, log_name)
     if os.path.exists(logfile):
         os.remove(logfile)
 
@@ -54,7 +57,7 @@ def main():
         format='[%(asctime)s] - %(message)s',
         datefmt='%Y/%m/%d %H:%M:%S',
         level=logging.INFO,
-        filename=os.path.join(args.out_dir, 'inc_output.log'))
+        filename=os.path.join(args.out_dir, log_name))
     logger.info(args)
 
     np.random.seed(args.seed)
@@ -73,7 +76,8 @@ def main():
 
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.momentum, weight_decay=args.weight_decay)
     scaler = GradScaler()
-    criterion = nn.CrossEntropyLoss()
+#TODO:
+    criterion = LabelSmoothing(0.1)
 
     if args.delta_init == 'previous':
         delta = torch.zeros(args.batch_size, 3, 32, 32).cuda()
@@ -88,10 +92,13 @@ def main():
     # Training
     prev_robust_acc = 0.
     start_train_time = time.time()
-    logger.info('Epoch \t Seconds \t LR \t \t Train Loss \t Robust Acc')
+    logger.info('Epoch \t Seconds \t LR \t \t Nat Loss \t Rob Loss \t Natural Acc \t Robust Acc')
     for epoch in range(args.epochs):
         start_epoch_time = time.time()
-        train_loss = 0
+        # train_loss = 0
+        nat_loss = 0
+        rob_loss = 0
+        nat_acc = 0
         rob_acc = 0
         train_n = 0
         for i, (X, y) in enumerate(tqdm(train_loader)):
@@ -106,6 +113,7 @@ def main():
                 delta.data = clamp(delta, lower_limit - X, upper_limit - X)
             delta.requires_grad = True
             
+            model.eval()
             with autocast():
                 output = model(X + delta[:X.size(0)])
                 loss = criterion(output, y)
@@ -116,16 +124,23 @@ def main():
             delta.data[:X.size(0)] = clamp(delta[:X.size(0)], lower_limit - X, upper_limit - X)
             delta = delta.detach()
 
+            model.train()
             opt.zero_grad()
             with autocast():
-                output = model(X + delta[:X.size(0)])
-                loss = criterion(output, y)
+                nat_output = model(X)
+                rob_output = model(X + delta[:X.size(0)])
+                n_loss = criterion(nat_output, y)
+                r_loss = criterion(rob_output, y)
+            loss = n_loss + args.lamda * r_loss
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
 
-            train_loss += loss.item() * y.size(0)
-            rob_acc += (output.max(1)[1] == y).sum().item()
+            nat_loss += n_loss.item() * y.size(0)
+            rob_loss += r_loss.item() * y.size(0)
+            # train_loss += loss.item() * y.size(0)
+            nat_acc += (nat_output.max(1)[1] == y).sum().item()
+            rob_acc += (rob_output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
             scheduler.step()
 
@@ -143,12 +158,13 @@ def main():
             best_state_dict = copy.deepcopy(model.state_dict())
         epoch_time = time.time()
         lr = scheduler.get_last_lr()[0]
-        logger.info('%d \t\t %.1f \t \t %.4f \t %.4f \t \t %.4f',
-            epoch, epoch_time - start_epoch_time, lr, train_loss/train_n, rob_acc/train_n)
+        logger.info('%d \t\t %.1f \t \t %.4f \t %.4f \t %.4f \t %.4f \t \t %.4f',
+            epoch, epoch_time - start_epoch_time, lr, nat_loss/train_n, rob_loss/train_n, nat_acc/train_n, rob_acc/train_n)
     train_time = time.time()
     if not args.early_stop:
         best_state_dict = model.state_dict()
-    torch.save(best_state_dict, os.path.join(args.out_dir, 'inc_model.pth'))
+    model_name = 'inc_model_l{}.pth'.format(args.lamda)
+    torch.save(best_state_dict, os.path.join(args.out_dir, model_name))
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
 
     # Evaluation
