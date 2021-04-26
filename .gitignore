@@ -1,8 +1,8 @@
 # Personal
 *.pth
 data/
-train_fgsm_output/
-train_inc_output/
+model_resnet18_trades/
+log_resnet18_trades/
 
 
 # Byte-compiled / optimized / DLL files

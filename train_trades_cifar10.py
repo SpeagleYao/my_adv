@@ -1,25 +1,31 @@
 from __future__ import print_function
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torch.optim as optim
+from torch.cuda.amp import autocast
+from torch.cuda.amp import GradScaler
 from torchvision import datasets, transforms
+import sys
+sys.path.append('..')
 
-from models.wideresnet import *
-from models.resnet import *
-from trades import trades_loss
+from models import PreActResNet18
+from loss import trades_loss
+from tqdm import tqdm
+from utils_logger import Logger
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR TRADES Adversarial Training')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=1024, metavar='N',
                     help='input batch size for testing (default: 128)')
 parser.add_argument('--epochs', type=int, default=76, metavar='N',
                     help='number of epochs to train')
-parser.add_argument('--weight-decay', '--wd', default=2e-4,
+parser.add_argument('--weight-decay', '--wd', default=5e-4,
                     type=float, metavar='W')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='learning rate')
@@ -37,9 +43,10 @@ parser.add_argument('--beta', default=6.0,
                     help='regularization, i.e., 1/lambda in TRADES')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+parser.add_argument('--log-interval', type=int, default=98, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model-dir', default='./model-cifar-wideResNet',
+parser.add_argument('--save-dir', type=str, default='log_resnet18_trades')
+parser.add_argument('--model-dir', default='model_resnet18_trades',
                     help='directory of model for saving checkpoint')
 parser.add_argument('--save-freq', '-s', default=1, type=int, metavar='N',
                     help='save frequency')
@@ -53,7 +60,10 @@ if not os.path.exists(model_dir):
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if use_cuda else "cpu")
-kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+kwargs = {'num_workers': 4, 'pin_memory': True} if use_cuda else {}
+log_filename = 'resnet18_trades.txt'
+sys.stdout = Logger(os.path.join(args.save_dir, log_filename))
+scaler = GradScaler()
 
 # setup data loader
 transform_train = transforms.Compose([
@@ -72,13 +82,14 @@ test_loader = torch.utils.data.DataLoader(testset, batch_size=args.test_batch_si
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
         data, target = data.to(device), target.to(device)
 
         optimizer.zero_grad()
 
         # calculate robust loss
-        loss = trades_loss(model=model,
+        with autocast():
+            loss = trades_loss(model=model,
                            x_natural=data,
                            y=target,
                            optimizer=optimizer,
@@ -86,12 +97,13 @@ def train(args, model, device, train_loader, optimizer, epoch):
                            epsilon=args.epsilon,
                            perturb_steps=args.num_steps,
                            beta=args.beta)
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         # print progress
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            tqdm.write('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.item()))
 
@@ -104,11 +116,11 @@ def eval_train(model, device, train_loader):
         for data, target in train_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            train_loss += F.cross_entropy(output, target, size_average=False).item()
+            train_loss += F.cross_entropy(output, target, reduction='sum').item()
             pred = output.max(1, keepdim=True)[1]
             correct += pred.eq(target.view_as(pred)).sum().item()
     train_loss /= len(train_loader.dataset)
-    print('Training: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+    tqdm.write('Training: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         train_loss, correct, len(train_loader.dataset),
         100. * correct / len(train_loader.dataset)))
     training_accuracy = correct / len(train_loader.dataset)
@@ -123,11 +135,11 @@ def eval_test(model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += F.cross_entropy(output, target, size_average=False).item()
+            test_loss += F.cross_entropy(output, target, reduction='sum').item()
             pred = output.max(1, keepdim=True)[1]
             correct += pred.eq(target.view_as(pred)).sum().item()
     test_loss /= len(test_loader.dataset)
-    print('Test: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+    tqdm.write('Test    : Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
     test_accuracy = correct / len(test_loader.dataset)
@@ -137,24 +149,24 @@ def eval_test(model, device, test_loader):
 def adjust_learning_rate(optimizer, epoch):
     """decrease the learning rate"""
     lr = args.lr
-    if epoch >= 75:
+    # early stopping
+    if epoch >= args.epochs:
         lr = args.lr * 0.1
-    if epoch >= 90:
-        lr = args.lr * 0.01
-    if epoch >= 100:
-        lr = args.lr * 0.001
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
 
 def main():
+    print("Let's use", torch.cuda.device_count(), "GPUs!")
     # init model, ResNet18() can be also used here for training
-    model = WideResNet().to(device)
+    model = PreActResNet18().to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
     for epoch in range(1, args.epochs + 1):
         # adjust learning rate for SGD
         adjust_learning_rate(optimizer, epoch)
+        for param_group in optimizer.param_groups:
+            print('Learning rate = ' + str(param_group['lr']))
 
         # adversarial training
         train(args, model, device, train_loader, optimizer, epoch)
@@ -166,11 +178,12 @@ def main():
         print('================================================================')
 
         # save checkpoint
-        if epoch % args.save_freq == 0:
-            torch.save(model.state_dict(),
-                       os.path.join(model_dir, 'model-wideres-epoch{}.pt'.format(epoch)))
-            torch.save(optimizer.state_dict(),
-                       os.path.join(model_dir, 'opt-wideres-checkpoint_epoch{}.tar'.format(epoch)))
+        # if epoch % args.save_freq == 0:
+        #     torch.save(model.state_dict(),
+        #                os.path.join(model_dir, 'model-wideres-epoch{}.pt'.format(epoch)))
+        #     torch.save(optimizer.state_dict(),
+        #                os.path.join(model_dir, 'opt-wideres-checkpoint_epoch{}.tar'.format(epoch)))
+    torch.save(model.state_dict(), os.path.join(model_dir, 'resnet18_trades.pth'))
 
 
 if __name__ == '__main__':
