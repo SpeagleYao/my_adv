@@ -102,7 +102,7 @@ def evaluate_pgd(test_loader, model, attack_iters, restarts):
             pgd_loss += loss.item() * y.size(0)
             pgd_acc += (output.max(1)[1] == y).sum().item()
             n += y.size(0)
-        break
+        break # only evaluate on one pgd batch or it takes too long
     return pgd_loss/n, pgd_acc/n
 
 

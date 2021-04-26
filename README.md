@@ -1,18 +1,18 @@
 # My Fastadv Code
 
-Here I create my own type of Fast Adversarial Training code!
+Here I create my own type of TRADES Adversarial Training code!
 
 Try to push more!
 
 ## Experiment setting
 
-    Learning rate: Cyclic learning rate(Linearly increase to 0.2 and decrease back to 0)
+    Learning rate: 0.1 at first. 0.01 at epoch 75 and end training at epoch 76.
 
     Weight Decay: 5e-4
 
     Batch Size: 128
 
-    Loss function: Label Smoothing = 0.1
+    Loss function: trades_loss
 
     Optimizer: SGD with momentem = 0.9
 
