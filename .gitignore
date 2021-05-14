@@ -1,8 +1,10 @@
 # Personal
 *.pth
 data/
-model_resnet18_trades/
-log_resnet18_trades/
+model_res18_trades/
+model_res18_inc_trades/
+log_res18_trades/
+log_res18_inc_trades/
 
 
 # Byte-compiled / optimized / DLL files
