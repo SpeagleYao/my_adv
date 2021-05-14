@@ -82,7 +82,8 @@ tot_step = args.epochs * len(train_loader)
 cur_step = 0
 
 
-def train(args, model, device, train_loader, optimizer, epoch, tot_step, cur_step):
+def train(args, model, device, train_loader, optimizer, epoch):
+    global cur_step
     model.train()
     for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
         data, target = data.to(device), target.to(device)
@@ -174,7 +175,7 @@ def main():
             if param_group['lr'] != 0.1: print('Learning rate = ' + str(param_group['lr']))
 
         # adversarial training
-        train(args, model, device, train_loader, optimizer, epoch, tot_step, cur_step)
+        train(args, model, device, train_loader, optimizer, epoch)
 
         # evaluation on natural examples
         print('================================================================')
