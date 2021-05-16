@@ -1,43 +1,15 @@
-Files already downloaded and verified
-Let's use 1 GPUs!
-pgd white-box attack
-err pgd (white-box):  tensor(118., device='cuda:0')
-err pgd (white-box):  tensor(130., device='cuda:0')
-err pgd (white-box):  tensor(125., device='cuda:0')
-err pgd (white-box):  tensor(112., device='cuda:0')
-err pgd (white-box):  tensor(120., device='cuda:0')
-err pgd (white-box):  tensor(110., device='cuda:0')
-err pgd (white-box):  tensor(118., device='cuda:0')
-err pgd (white-box):  tensor(131., device='cuda:0')
-err pgd (white-box):  tensor(122., device='cuda:0')
-err pgd (white-box):  tensor(142., device='cuda:0')
-err pgd (white-box):  tensor(115., device='cuda:0')
-err pgd (white-box):  tensor(122., device='cuda:0')
-err pgd (white-box):  tensor(113., device='cuda:0')
-err pgd (white-box):  tensor(121., device='cuda:0')
-err pgd (white-box):  tensor(123., device='cuda:0')
-err pgd (white-box):  tensor(121., device='cuda:0')
-err pgd (white-box):  tensor(113., device='cuda:0')
-err pgd (white-box):  tensor(114., device='cuda:0')
-err pgd (white-box):  tensor(115., device='cuda:0')
-err pgd (white-box):  tensor(131., device='cuda:0')
-err pgd (white-box):  tensor(130., device='cuda:0')
-err pgd (white-box):  tensor(134., device='cuda:0')
-err pgd (white-box):  tensor(125., device='cuda:0')
-err pgd (white-box):  tensor(139., device='cuda:0')
-err pgd (white-box):  tensor(118., device='cuda:0')
-err pgd (white-box):  tensor(124., device='cuda:0')
-err pgd (white-box):  tensor(126., device='cuda:0')
-err pgd (white-box):  tensor(125., device='cuda:0')
-err pgd (white-box):  tensor(136., device='cuda:0')
-err pgd (white-box):  tensor(121., device='cuda:0')
-err pgd (white-box):  tensor(117., device='cuda:0')
-err pgd (white-box):  tensor(126., device='cuda:0')
-err pgd (white-box):  tensor(136., device='cuda:0')
-err pgd (white-box):  tensor(125., device='cuda:0')
-err pgd (white-box):  tensor(108., device='cuda:0')
-err pgd (white-box):  tensor(111., device='cuda:0')
-err pgd (white-box):  tensor(124., device='cuda:0')
-err pgd (white-box):  tensor(116., device='cuda:0')
-err pgd (white-box):  tensor(131., device='cuda:0')
-err pgd (white-box):  tensor(9., device='cuda:0')
+trades 6.0
+natural_acc:     79.99 %
+robust _acc:     52.05 %
+
+inc_trades 6.0
+natural_acc:     80.13 %
+robust _acc:     52.32 %
+
+inc_trades 8.0
+natural_acc:     78.54 %
+robust _acc:     51.94 %
+
+inc_trades 10.0
+natural_acc:     77.16 %
+robust _acc:     52.02 %
